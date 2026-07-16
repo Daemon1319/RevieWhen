@@ -39,6 +39,17 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
+
+  // Supabase sometimes lands PKCE `?code=` on Site URL (/) or /login.
+  // Only /auth/callback exchanges the code for a session — forward it there.
+  const authCode = request.nextUrl.searchParams.get("code");
+  if (authCode && !path.startsWith("/auth/callback")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/callback";
+    // Keep code (and any next=) as-is; drop unrelated noise by cloning search.
+    return NextResponse.redirect(url);
+  }
+
   const isAuthRoute =
     path.startsWith("/login") ||
     path.startsWith("/auth") ||
