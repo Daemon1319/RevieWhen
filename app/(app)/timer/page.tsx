@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/auth";
 import { TimerClient } from "@/components/timer/timer-client";
 import type { StudySession, Subject, Topic } from "@/lib/types";
 
@@ -8,11 +9,10 @@ export default async function TimerPage({
   searchParams: Promise<{ subject?: string; topic?: string; start?: string }>;
 }) {
   const params = await searchParams;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return null;
+
+  const supabase = await createClient();
 
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
@@ -39,7 +39,9 @@ export default async function TimerPage({
       .order("name"),
     supabase
       .from("study_sessions")
-      .select("*")
+      .select(
+        "id, user_id, subject_id, topic_id, started_at, ended_at, duration_sec, note, created_at",
+      )
       .eq("user_id", user.id)
       .order("started_at", { ascending: false })
       .limit(20),

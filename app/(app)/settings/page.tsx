@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/auth";
 import { SignOutButton } from "@/components/settings/sign-out-button";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { PageHeader } from "@/components/ui/page-header";
@@ -6,10 +6,7 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 
 export default async function SettingsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   return (
     <div className={ui.page}>

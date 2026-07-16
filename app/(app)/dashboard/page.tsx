@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/auth";
 import { formatDuration, progressForTopics } from "@/lib/progress";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import type { ErrorLog, Subject, Subtopic, Todo, Topic } from "@/lib/types";
+import type { ErrorLog, Todo } from "@/lib/types";
 
 function todayLocalDate() {
   const d = new Date();
@@ -16,9 +17,10 @@ function todayLocalDate() {
 
 function formatShortDate(isoOrDate: string) {
   // Accept YYYY-MM-DD or full ISO
-  const d = isoOrDate.length <= 10
-    ? new Date(`${isoOrDate}T12:00:00`)
-    : new Date(isoOrDate);
+  const d =
+    isoOrDate.length <= 10
+      ? new Date(`${isoOrDate}T12:00:00`)
+      : new Date(isoOrDate);
   return d.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -33,13 +35,23 @@ function formatLongDate(d: Date) {
   });
 }
 
+type NestedSubject = {
+  id: string;
+  name: string;
+  color: string | null;
+  topics:
+    | {
+        id: string;
+        subtopics: { id: string; is_done: boolean }[] | null;
+      }[]
+    | null;
+};
+
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return null;
 
+  const supabase = await createClient();
   const todayDate = todayLocalDate();
   // End of local today — so "review on Jul 16 1:37 PM" counts as due all day
   const endOfToday = new Date();
@@ -51,41 +63,64 @@ export default async function DashboardPage() {
 
   const [
     { data: subjects },
-    { data: topics },
-    { data: subtopics },
-    { data: openTodos },
+    { count: openTodoCount },
     { data: dueTodos },
+    { count: dueTodoCount },
     { data: dueReviews },
+    { count: dueReviewCount },
     { data: weekSessions },
   ] = await Promise.all([
     supabase
       .from("subjects")
-      .select("*")
+      .select(
+        `
+        id,
+        name,
+        color,
+        topics (
+          id,
+          subtopics ( id, is_done )
+        )
+      `,
+      )
       .eq("user_id", user.id)
       .order("sort_order")
       .limit(6),
-    supabase.from("topics").select("*").eq("user_id", user.id),
-    supabase.from("subtopics").select("*").eq("user_id", user.id),
     supabase
       .from("todos")
-      .select("id")
+      .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .eq("is_done", false),
     supabase
       .from("todos")
-      .select("*")
+      .select("id, title, due_at")
       .eq("user_id", user.id)
       .eq("is_done", false)
       .lte("due_at", todayDate)
-      .order("due_at"),
+      .order("due_at")
+      .limit(6),
+    supabase
+      .from("todos")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("is_done", false)
+      .lte("due_at", todayDate),
     supabase
       .from("error_logs")
-      .select("*")
+      .select("id, title, remind_at")
       .eq("user_id", user.id)
       .neq("status", "resolved")
       .not("remind_at", "is", null)
       .lte("remind_at", endOfTodayIso)
-      .order("remind_at"),
+      .order("remind_at")
+      .limit(6),
+    supabase
+      .from("error_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .neq("status", "resolved")
+      .not("remind_at", "is", null)
+      .lte("remind_at", endOfTodayIso),
     supabase
       .from("study_sessions")
       .select("duration_sec")
@@ -93,24 +128,32 @@ export default async function DashboardPage() {
       .gte("started_at", weekAgo.toISOString()),
   ]);
 
-  const subjectList = (subjects ?? []) as Subject[];
-  const topicList = (topics ?? []) as Topic[];
-  const subList = (subtopics ?? []) as Subtopic[];
-  const openTodoCount = (openTodos ?? []).length;
-  const dueTodoList = (dueTodos ?? []) as Todo[];
-  const dueReviewList = (dueReviews ?? []) as ErrorLog[];
+  const subjectList = (subjects ?? []) as NestedSubject[];
+  const dueTodoList = (dueTodos ?? []) as Pick<Todo, "id" | "title" | "due_at">[];
+  const dueReviewList = (dueReviews ?? []) as Pick<
+    ErrorLog,
+    "id" | "title" | "remind_at"
+  >[];
+  const totalDueTodos = dueTodoCount ?? 0;
+  const totalDueReviews = dueReviewCount ?? 0;
 
   const subjectCards = subjectList.map((subject) => {
-    const subjectTopics = topicList.filter((t) => t.subject_id === subject.id);
-    const byTopic = new Map<string, Subtopic[]>();
+    const subjectTopics = subject.topics ?? [];
+    const byTopic = new Map<
+      string,
+      { id: string; is_done: boolean }[]
+    >();
     for (const t of subjectTopics) {
-      byTopic.set(
-        t.id,
-        subList.filter((s) => s.topic_id === t.id),
-      );
+      byTopic.set(t.id, t.subtopics ?? []);
     }
     const { subject: progress } = progressForTopics(subjectTopics, byTopic);
-    return { ...subject, progress, topicCount: subjectTopics.length };
+    return {
+      id: subject.id,
+      name: subject.name,
+      color: subject.color,
+      progress,
+      topicCount: subjectTopics.length,
+    };
   });
 
   const weekSeconds = (weekSessions ?? []).reduce(
@@ -127,7 +170,8 @@ export default async function DashboardPage() {
         ? "Good afternoon"
         : "Good evening";
 
-  const attentionCount = dueTodoList.length + dueReviewList.length;
+  const attentionCount = totalDueTodos + totalDueReviews;
+  const openCount = openTodoCount ?? 0;
 
   return (
     <div className="space-y-8">
@@ -181,7 +225,7 @@ export default async function DashboardPage() {
               </Link>
             </div>
             <ul className="flex-1 divide-y divide-zinc-100 dark:divide-zinc-800">
-              {dueTodoList.slice(0, 6).map((t) => (
+              {dueTodoList.map((t) => (
                 <li
                   key={t.id}
                   className="flex items-start gap-3 px-4 py-3.5 sm:px-5"
@@ -222,7 +266,7 @@ export default async function DashboardPage() {
               </Link>
             </div>
             <ul className="flex-1 divide-y divide-zinc-100 dark:divide-zinc-800">
-              {dueReviewList.slice(0, 6).map((e) => (
+              {dueReviewList.map((e) => (
                 <li
                   key={e.id}
                   className="flex items-start gap-3 px-4 py-3.5 sm:px-5"
@@ -286,7 +330,7 @@ export default async function DashboardPage() {
           )}
         >
           <p className={ui.sectionLabel}>Open todos</p>
-          <p className={ui.statValue}>{openTodoCount}</p>
+          <p className={ui.statValue}>{openCount}</p>
           <p className="mt-3 text-xs font-medium text-zinc-400 transition group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
             View todos →
           </p>
@@ -301,7 +345,7 @@ export default async function DashboardPage() {
           )}
         >
           <p className={ui.sectionLabel}>Reviews due</p>
-          <p className={ui.statValue}>{dueReviewList.length}</p>
+          <p className={ui.statValue}>{totalDueReviews}</p>
           <p className="mt-3 text-xs font-medium text-zinc-400 transition group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
             View reviews →
           </p>

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/auth";
 import { ScoresClient } from "@/components/scores/scores-client";
 import { PageHeader } from "@/components/ui/page-header";
 import { ui } from "@/lib/ui";
@@ -10,21 +11,25 @@ import type {
 } from "@/lib/types";
 
 export default async function ScoresPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return null;
+
+  const supabase = await createClient();
 
   const [{ data: scores }, { data: links }, { data: subjects }] =
     await Promise.all([
       supabase
         .from("score_logs")
-        .select("*")
+        .select(
+          "id, user_id, quiz_name, score, total_items, notes, taken_at, created_at, updated_at",
+        )
         .eq("user_id", user.id)
         .order("taken_at", { ascending: false })
         .order("created_at", { ascending: false }),
-      supabase.from("score_log_subjects").select("*").eq("user_id", user.id),
+      supabase
+        .from("score_log_subjects")
+        .select("score_log_id, subject_id, user_id")
+        .eq("user_id", user.id),
       supabase
         .from("subjects")
         .select("id, name, color")

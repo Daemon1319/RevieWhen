@@ -1,11 +1,9 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 
-export default async function HomePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  redirect(user ? "/dashboard" : "/login");
+/**
+ * Root is gated by the proxy. Authenticated users land here and go to the app;
+ * unauthenticated users never reach this page (proxy → /login).
+ */
+export default function HomePage() {
+  redirect("/dashboard");
 }
