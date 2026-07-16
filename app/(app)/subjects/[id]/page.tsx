@@ -1,8 +1,13 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/auth";
 import { progressForTopics } from "@/lib/progress";
 import { SubjectDetailClient } from "@/components/subjects/subject-detail-client";
-import type { Subtopic, Topic } from "@/lib/types";
+import type { Topic } from "@/lib/types";
+
+type NestedTopic = Topic & {
+  subtopics: { id: string; topic_id: string; is_done: boolean }[] | null;
+};
 
 export default async function SubjectDetailPage({
   params,
@@ -10,46 +15,50 @@ export default async function SubjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return null;
 
+  const supabase = await createClient();
+
+  // Subject + topics + subtopics in one round-trip
   const { data: subject } = await supabase
     .from("subjects")
-    .select("*")
+    .select(
+      `
+      id,
+      name,
+      topics (
+        id,
+        user_id,
+        subject_id,
+        name,
+        sort_order,
+        created_at,
+        updated_at,
+        subtopics ( id, topic_id, is_done )
+      )
+    `,
+    )
     .eq("id", id)
     .eq("user_id", user.id)
+    .order("sort_order", { referencedTable: "topics" })
+    .order("created_at", { referencedTable: "topics" })
     .maybeSingle();
 
   if (!subject) notFound();
 
-  const { data: topicData } = await supabase
-    .from("topics")
-    .select("*")
-    .eq("subject_id", id)
-    .order("sort_order")
-    .order("created_at");
+  const topics = ((subject.topics ?? []) as NestedTopic[]).slice().sort(
+    (a, b) =>
+      a.sort_order - b.sort_order ||
+      a.created_at.localeCompare(b.created_at),
+  );
 
-  const topics = (topicData ?? []) as Topic[];
-  const topicIds = topics.map((t) => t.id);
-
-  let subtopics: Subtopic[] = [];
-  if (topicIds.length > 0) {
-    const { data: subData } = await supabase
-      .from("subtopics")
-      .select("*")
-      .in("topic_id", topicIds);
-    subtopics = (subData ?? []) as Subtopic[];
-  }
-
-  const byTopic = new Map<string, Subtopic[]>();
+  const byTopic = new Map<
+    string,
+    { id: string; topic_id: string; is_done: boolean }[]
+  >();
   for (const t of topics) {
-    byTopic.set(
-      t.id,
-      subtopics.filter((s) => s.topic_id === t.id),
-    );
+    byTopic.set(t.id, t.subtopics ?? []);
   }
   const { byTopicId, subject: subjectProgress } = progressForTopics(
     topics,
@@ -57,14 +66,21 @@ export default async function SubjectDetailPage({
   );
 
   const topicRows = topics.map((t) => ({
-    ...t,
+    id: t.id,
+    user_id: t.user_id,
+    subject_id: t.subject_id,
+    name: t.name,
+    sort_order: t.sort_order,
+    created_at: t.created_at,
+    updated_at: t.updated_at,
     progress: byTopicId.get(t.id) ?? 0,
+    subtopicCount: (t.subtopics ?? []).length,
   }));
 
   return (
     <SubjectDetailClient
-      subjectId={subject.id}
-      subjectName={subject.name}
+      subjectId={subject.id as string}
+      subjectName={subject.name as string}
       subjectProgress={subjectProgress}
       topics={topicRows}
       userId={user.id}
