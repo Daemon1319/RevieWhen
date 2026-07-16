@@ -102,9 +102,14 @@ export function LoginForm() {
           return;
         }
 
+        const origin = window.location.origin;
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
+          options: {
+            // Confirm-email links must hit /auth/callback so the code is exchanged.
+            emailRedirectTo: `${origin}/auth/callback`,
+          },
         });
 
         if (error) {
