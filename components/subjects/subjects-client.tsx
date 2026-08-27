@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ProgressBar } from "@/components/ui/progress-bar";
@@ -30,6 +30,16 @@ export function SubjectsClient({
   const [color, setColor] = useState("#10b981");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingId]);
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -48,6 +58,23 @@ export function SubjectsClient({
       return;
     }
     setName("");
+    router.refresh();
+  }
+
+  async function onRename(id: string) {
+    const trimmed = editingName.trim();
+    if (!trimmed) {
+      setEditingId(null);
+      setEditingName("");
+      return;
+    }
+    const supabase = createClient();
+    await supabase
+      .from("subjects")
+      .update({ name: trimmed })
+      .eq("id", id);
+    setEditingId(null);
+    setEditingName("");
     router.refresh();
   }
 
@@ -112,6 +139,7 @@ export function SubjectsClient({
             const topics = subject.topicCount ?? 0;
             const subs = subject.subtopicCount ?? 0;
             const done = subject.doneCount ?? 0;
+            const isEditing = editingId === subject.id;
             return (
               <li
                 key={subject.id}
@@ -122,7 +150,11 @@ export function SubjectsClient({
               >
                 <Link
                   href={`/subjects/${subject.id}`}
-                  className="min-w-0 flex-1 p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/30 sm:p-6"
+                  className={cn(
+                    "min-w-0 flex-1 p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/30 sm:p-6",
+                    isEditing && "pointer-events-none",
+                  )}
+                  onClick={(e) => { if (isEditing) e.preventDefault(); }}
                 >
                   <div className="mb-1 flex items-start gap-3">
                     <span
@@ -133,9 +165,28 @@ export function SubjectsClient({
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-3">
-                        <p className="truncate text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-                          {subject.name}
-                        </p>
+                        {isEditing ? (
+                          <input
+                            ref={editInputRef}
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                onRename(subject.id);
+                              } else if (e.key === "Escape") {
+                                setEditingId(null);
+                                setEditingName("");
+                              }
+                            }}
+                            className="pointer-events-auto w-full truncate rounded-lg border border-emerald-400 bg-white px-2 py-0.5 text-lg font-semibold tracking-tight text-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-emerald-600 dark:bg-zinc-950 dark:text-zinc-50"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <p className="truncate text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                            {subject.name}
+                          </p>
+                        )}
                         <span className="shrink-0 text-base font-semibold tabular-nums text-zinc-500">
                           {subject.progress}%
                         </span>
@@ -155,13 +206,32 @@ export function SubjectsClient({
                     />
                   </div>
                 </Link>
-                <div className="flex shrink-0 items-start border-l border-zinc-100 dark:border-zinc-800">
+                <div className="flex shrink-0 flex-col items-stretch border-l border-zinc-100 dark:border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isEditing) {
+                        onRename(subject.id);
+                      } else {
+                        setEditingId(subject.id);
+                        setEditingName(subject.name);
+                      }
+                    }}
+                    className={cn(
+                      "flex-1 px-3 text-sm font-medium transition sm:px-4",
+                      isEditing
+                        ? "text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                        : "text-zinc-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400",
+                    )}
+                  >
+                    {isEditing ? "Save" : "Edit"}
+                  </button>
                   <button
                     type="button"
                     onClick={() => onDelete(subject.id)}
                     className={cn(
                       ui.deleteLink,
-                      "h-full px-3 py-5 hover:bg-red-50 dark:hover:bg-red-950/30 sm:px-4 sm:py-6",
+                      "flex-1 border-t border-zinc-100 px-3 hover:bg-red-50 dark:border-zinc-800 dark:hover:bg-red-950/30 sm:px-4",
                     )}
                   >
                     Delete
