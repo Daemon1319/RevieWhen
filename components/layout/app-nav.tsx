@@ -14,6 +14,7 @@ import {
   IconSettings,
   IconTimer,
 } from "@/components/layout/nav-icons";
+import { InlineTimer } from "@/components/timer/inline-timer";
 
 type NavItem = {
   href: string;
@@ -110,15 +111,18 @@ export function AppNav() {
       {/* Desktop top bar */}
       <header className="sticky top-0 z-40 hidden border-b border-zinc-200/80 bg-white/80 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/80 md:block">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 md:px-6">
-          <Link
-            href="/dashboard"
-            className="group flex items-center gap-2.5 text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white shadow-sm shadow-emerald-600/20 transition group-hover:bg-emerald-500">
-              R
-            </span>
-            RevieWhen
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/dashboard"
+              className="group flex items-center gap-2.5 text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white shadow-sm shadow-emerald-600/20 transition group-hover:bg-emerald-500">
+                R
+              </span>
+              RevieWhen
+            </Link>
+            <InlineTimer />
+          </div>
 
           <nav aria-label="Main">
             <ul className="flex items-center gap-1">
@@ -163,15 +167,18 @@ export function AppNav() {
       {/* Mobile top brand strip */}
       <header className="sticky top-0 z-40 border-b border-zinc-200/80 bg-white/80 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/80 md:hidden">
         <div className="flex h-14 items-center justify-between px-5">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2.5 text-base font-semibold tracking-tight"
-          >
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-xs font-bold text-white">
-              R
-            </span>
-            RevieWhen
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-2.5 text-base font-semibold tracking-tight"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-xs font-bold text-white">
+                R
+              </span>
+              RevieWhen
+            </Link>
+            <InlineTimer />
+          </div>
           <Link
             href="/settings"
             className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
