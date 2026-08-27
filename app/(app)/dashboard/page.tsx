@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { formatDuration, progressForTopics } from "@/lib/progress";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { Greeting } from "@/components/layout/greeting";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import type { ErrorLog, Todo } from "@/lib/types";
@@ -27,13 +28,7 @@ function formatShortDate(isoOrDate: string) {
   });
 }
 
-function formatLongDate(d: Date) {
-  return d.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
+
 
 type NestedSubject = {
   id: string;
@@ -161,14 +156,7 @@ export default async function DashboardPage() {
     0,
   );
 
-  const now = new Date();
-  const greetingHour = now.getHours();
-  const greeting =
-    greetingHour < 12
-      ? "Good morning"
-      : greetingHour < 17
-        ? "Good afternoon"
-        : "Good evening";
+
 
   const attentionCount = totalDueTodos + totalDueReviews;
   const openCount = openTodoCount ?? 0;
@@ -178,12 +166,7 @@ export default async function DashboardPage() {
       {/* Hero */}
       <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1.5">
-          <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500">
-            {formatLongDate(now)}
-          </p>
-          <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            {greeting}
-          </h1>
+          <Greeting />
           <p className="max-w-lg text-base leading-relaxed text-zinc-500 dark:text-zinc-400">
             {attentionCount > 0
               ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} need your attention today.`
